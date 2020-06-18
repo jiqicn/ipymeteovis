@@ -1,3 +1,7 @@
+"""Methods and Classes definition related to view
+"""
+
+
 class View:
     def __init__(self, *args):
         pass
@@ -17,4 +21,3 @@ class View:
         :return:
         """
         pass
-
