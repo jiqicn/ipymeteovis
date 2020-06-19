@@ -12,6 +12,7 @@ import os
 import time
 from functools import partial
 import multiprocessing as mp
+import copy
 
 import h5py
 import wradlib as wrl
@@ -72,16 +73,6 @@ class Control(object):
         os.mkdir(t_dir)  # temp directory
         os.mkdir(temp_path)  # temp file directory
 
-        # create profile
-        t_profile = {
-            "id": id,
-            "source": self.data_path,
-            "temp_path": temp_path,
-            "task": config
-        }
-        with open(t_dir + "/profile.txt", 'w') as f:
-            print(t_profile, file=f)
-
         # create task list
         print("[STEP] Initialize task......", end="")
         job = partial(
@@ -111,6 +102,16 @@ class Control(object):
         args = self.tasks
         self.parallel(job, args)
         print("Done!")
+
+        # create profile
+        t_profile = {
+            "id": id,
+            "source": self.data_path,
+            "temp_path": temp_path,
+            "task": self.tasks[0].get_profile(config)
+        }
+        with open(t_dir + "/profile.txt", 'w') as f:
+            print(t_profile, file=f)
         print("[STEP] Task completed!")
 
     @staticmethod
@@ -202,8 +203,7 @@ class PolarVol2D:
             keys = [s for s in f["dataset1"].keys() if "data" in s]
             for i in range(len(keys)):
                 k = keys[i]
-                qty = f["dataset1"][k]["what"].attrs["quantity"].decode(
-                    "utf-8")
+                qty = f["dataset1"][k]["what"].attrs["quantity"].decode("utf-8")
                 t = (qty, k)
                 qty_list.append(t)
         o_list.append({
@@ -222,6 +222,24 @@ class PolarVol2D:
         })
 
         return o_list
+
+    def get_profile(self, config):
+        """Return the profile string
+        :return:
+        """
+        c = copy.deepcopy(config)
+        scan = c["options"]["scan"]
+        qty = c["options"]["qty"]
+        app = c["options"]["appearance"]
+        with h5py.File(self.file_path, "r") as f:
+            scan = "Elev. = " + str(f[scan]["where"].attrs["elangle"])
+            qty = f["dataset1"][qty]["what"].attrs["quantity"].decode("utf-8")
+        c["options"] = {
+            "Scan": scan,
+            "Quantity": qty,
+            "Appearance": app
+        }
+        return c
 
     def process(self, config):
         """
@@ -247,10 +265,10 @@ class PolarVol2D:
             lat = float(f["where"].attrs["lat"])
             height = float(f["where"].attrs["height"])
             date = f["what"].attrs["date"]
-            time = f["what"].attrs["time"]
+            tp = f["what"].attrs["time"]
 
         # Datetime stamp
-        self.dt = date.decode("utf-8") + " " + time.decode("utf-8")
+        self.dt = date.decode("utf-8") + " " + tp.decode("utf-8")
         self.dt = parser.parse(self.dt)
         self.dt = self.dt.replace(second=0, microsecond=0)  # ignore second
         self.dt = self.dt.strftime("%Y%m%d %H%M")  # transfer back to str

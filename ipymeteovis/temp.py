@@ -2,6 +2,7 @@
 """
 
 import os
+import shutil
 
 import ipywidgets as widgets
 from IPython.display import display
@@ -18,19 +19,12 @@ def make(data_path):
     g.show()
 
 
-def get(*args):
+def list(*args):
     """Get list of temporary set
     :return:
     """
-    g = Get_GUI()
+    g = List_GUI()
     g.show()
-
-
-def remove():
-    """Remove existing temporary set
-    :return:
-    """
-    pass
 
 
 class Temp:
@@ -39,33 +33,67 @@ class Temp:
     This is for instantiating temporary sets for creating views.
     """
 
-    def __init__(self, temp_path):
+    def __init__(self, temp_path, id):
+        self.id = id
         self.temp_path = temp_path
-        self.profile = None
+        self.is_chosen = False
 
-        # get profile information
+        # read profile information
         with open(temp_path + "/profile.txt", "r") as f:
             self.profile = eval(f.read())
-        print(self.profile)
 
     def get_profile(self):
         """Return the profile information of this temporary set.
         :return:
         """
-        desc = "name: " + self.profile["task"]["name"]
-        desc += ", task: " + self.profile["task"]["task"]
+        # description of temp set
+        p_str = "<b>ID</b>: " + str(self.id) + "<br>"
+        p_str += "<b>Name</b>: " + self.profile["task"]["name"] + "<br>"
+        p_str += "<b>Task</b>: " + self.profile["task"]["task"] + "<br>"
+        desc = self.profile["task"]["desc"]
+        if len(desc) > 50:
+            desc = desc[:50] + "..."
+        p_str += "<b>Description</b>: " + desc + "<br>"
+        p_str += "<b>Details</b>: <br>"
         for o in self.profile["task"]["options"]:
-            desc += ", " + o + ": " + self.profile["task"]["options"][o]
-        w = widgets.HTML(
-            value=desc
+            p_str += "|-- <b>" + o + "</b>: " + self.profile["task"][
+                "options"][o] \
+                     + "<br>"
+        p_str += "<b>Example:</b>"
+        p_str = "<p style='line-height: 1.3em'>" + p_str + "</p>"
+        desc = widgets.HTML(
+            value=p_str,
         )
-        return w
+
+        # example image
+        img_path = self.temp_path + "/temp"
+        for r, d, fs in os.walk(img_path):
+            for f in fs:
+                img_path = img_path + "/" + f
+                break
+            break
+        img = widgets.Image(
+            value=open(img_path, "rb").read(),
+            width="80%",
+        )
+
+        # remove button of the temp set
+        def remove_choose(change):
+            self.is_chosen = change["new"]
+        remove = widgets.ToggleButton(
+            value=self.is_chosen,
+            description="Choose",
+            icon="check"
+        )
+        remove.observe(remove_choose, names="value")
+
+        return widgets.VBox([desc, img, remove])
 
     def remove(self):
         """Remove this temporary set.
         :return:
         """
-        pass
+        shutil.rmtree(self.temp_path)
 
 
 class Make_GUI:
@@ -190,39 +218,68 @@ class Make_GUI:
             w.observe(value_change, names="value")
 
 
-class Get_GUI:
+class List_GUI:
     """GUI regarding the get method of temporary set
     """
 
     def __init__(self):
-        # get temp list
-        t_list = os.listdir(TEMP_SET_PATH)
-        t_list = [TEMP_SET_PATH + "/" + d for d in t_list if
-                       not d.startswith('.')]
-        t_list = [d for d in t_list if os.path.isdir(d)]
-        t_list = [Temp(d) for d in t_list]
+        self.t_list = [] # list of temp
 
         # add temp sets as widgets to the GUI
         title = widgets.HTML(
-            value="<b style='font-size: medium'>"
-                  "Get Temporary Set</b>"
+            value="<b style='font-size: medium'>List of Temporary Set</b>"
         )
-        temps = widgets.VBox(
+
+        # container of temp sets
+        self.temps = widgets.GridBox(
             layout=widgets.Layout(
-                width="100%"
+                grid_template_columns='33.3% 33.3% 33.3%'
             )
         )
-        for t in t_list:
-            temps.children += (t.get_profile(), )
 
+        # remove button
+        def remove_click(b):
+            self.remove_temps()
+        remove = widgets.Button(
+            description="Remove",
+            icon="trash"
+        )
+        remove.on_click(remove_click)
+
+        # container of the whole UI
         self.container = widgets.VBox([
-            title, temps
+            title, self.temps, remove
         ])
 
+    def update_temps(self):
+        """Update the temp list based on the existing temp sets.
+        :return:
+        """
+        self.temps.children = []
+        # get temp list
+        self.t_list = os.listdir(TEMP_SET_PATH)
+        self.t_list = [TEMP_SET_PATH + "/" + d for d in self.t_list if
+                  not d.startswith('.')]
+        self.t_list = [d for d in self.t_list if os.path.isdir(d)]
+        self.t_list.sort() # sort increasingly
+        temp = []
+        for id in range(len(self.t_list)):
+            d = self.t_list[id]
+            temp.append(Temp(d, id))
+        self.t_list = temp
+
+        for t in self.t_list:
+            self.temps.children += (t.get_profile(),)
+
+    def remove_temps(self):
+        """Remove temps based on the choosing status
+        :return:
+        """
+        for t in self.t_list:
+            if t.is_chosen:
+                t.remove()
+        self.update_temps()
+
     def show(self):
+        self.update_temps()
         display(self.container)
-
-
-class Remove_GUI:
-    def __init__(self):
-        pass
