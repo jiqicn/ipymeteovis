@@ -105,7 +105,6 @@ class Control(object):
 
         # create profile
         t_profile = {
-            "id": id,
             "source": self.data_path,
             "temp_path": temp_path,
             "task": self.tasks[0].get_profile(config)
@@ -237,7 +236,9 @@ class PolarVol2D:
         c["options"] = {
             "Scan": scan,
             "Quantity": qty,
-            "Appearance": app
+            "Appearance": app,
+            "Colormap": ("jet", (self.v_min, self.v_max)),
+            "Bounds": self.bounds
         }
         return c
 

@@ -27,19 +27,22 @@ def list(*args):
     g.show()
 
 
-class Temp:
+class Temp(object):
     """Class definition of a temporary set.
 
     This is for instantiating temporary sets for creating views.
     """
 
-    def __init__(self, temp_path, id):
+    def __init__(self, id):
         self.id = id
-        self.temp_path = temp_path
         self.is_chosen = False
 
+        # get temp path
+        t_list = self.get_temp_list()
+        self.temp_path = t_list[id]
+
         # read profile information
-        with open(temp_path + "/profile.txt", "r") as f:
+        with open(self.temp_path + "/profile.txt", "r") as f:
             self.profile = eval(f.read())
 
     def get_profile(self):
@@ -56,9 +59,8 @@ class Temp:
         p_str += "<b>Description</b>: " + desc + "<br>"
         p_str += "<b>Details</b>: <br>"
         for o in self.profile["task"]["options"]:
-            p_str += "|-- <b>" + o + "</b>: " + self.profile["task"][
-                "options"][o] \
-                     + "<br>"
+            p_str += "|-- <b>" + o + "</b>: " + \
+                     str(self.profile["task"]["options"][o]) + "<br>"
         p_str += "<b>Example:</b>"
         p_str = "<p style='line-height: 1.3em'>" + p_str + "</p>"
         desc = widgets.HTML(
@@ -80,6 +82,7 @@ class Temp:
         # remove button of the temp set
         def remove_choose(change):
             self.is_chosen = change["new"]
+
         remove = widgets.ToggleButton(
             value=self.is_chosen,
             description="Choose",
@@ -95,8 +98,20 @@ class Temp:
         """
         shutil.rmtree(self.temp_path)
 
+    @staticmethod
+    def get_temp_list():
+        """Get the path list of existing temp sets
+        :return:
+        """
+        t_list = os.listdir(TEMP_SET_PATH)
+        t_list = [TEMP_SET_PATH + "/" + d for d in t_list if
+                  not d.startswith('.')]
+        t_list = [d for d in t_list if os.path.isdir(d)]
+        t_list.sort()  # sort increasingly
+        return t_list
 
-class Make_GUI:
+
+class Make_GUI(object):
     """GUI regarding the "make" method of temporary sets.
     """
 
@@ -218,12 +233,12 @@ class Make_GUI:
             w.observe(value_change, names="value")
 
 
-class List_GUI:
+class List_GUI(object):
     """GUI regarding the get method of temporary set
     """
 
     def __init__(self):
-        self.t_list = [] # list of temp
+        self.t_list = []  # list of temp
 
         # add temp sets as widgets to the GUI
         title = widgets.HTML(
@@ -233,13 +248,14 @@ class List_GUI:
         # container of temp sets
         self.temps = widgets.GridBox(
             layout=widgets.Layout(
-                grid_template_columns='33.3% 33.3% 33.3%'
+                grid_template_columns='33.3% 33.3% 33.3%',
             )
         )
 
         # remove button
         def remove_click(b):
             self.remove_temps()
+
         remove = widgets.Button(
             description="Remove",
             icon="trash"
@@ -256,17 +272,10 @@ class List_GUI:
         :return:
         """
         self.temps.children = []
-        # get temp list
-        self.t_list = os.listdir(TEMP_SET_PATH)
-        self.t_list = [TEMP_SET_PATH + "/" + d for d in self.t_list if
-                  not d.startswith('.')]
-        self.t_list = [d for d in self.t_list if os.path.isdir(d)]
-        self.t_list.sort() # sort increasingly
-        temp = []
-        for id in range(len(self.t_list)):
-            d = self.t_list[id]
-            temp.append(Temp(d, id))
-        self.t_list = temp
+
+        # initialize temp list
+        self.t_list = Temp.get_temp_list()
+        self.t_list = [Temp(id) for id in range(len(self.t_list))]
 
         for t in self.t_list:
             self.temps.children += (t.get_profile(),)
