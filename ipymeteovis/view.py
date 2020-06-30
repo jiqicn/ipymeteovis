@@ -15,22 +15,26 @@ from .task import Task
 
 
 class View(object):
-    def __init__(self, *args, view="single", height=400, col=1):
+    def __init__(self, *args, height=400, col=1, link=False, multi=False):
         self.maps = []
         self.layers = []
         self.cont = None
         self.ctrl = None
         self.height = str(height) + "px"  # height of basemap
         self.col = col  # number of columns of content
+        self.link = link  # only for multiple views, if maps are linked
+        self.multi = multi  # single or multiple views
 
         if len(args) == 1:
             self.unit_view(args[0])  # unit
         else:
             v_list = [View(i, height=height) for i in args]
-            if view == "single":
+            if not multi:
                 self.single_view(v_list)  # single
-            elif view == "multiple":
+            elif multi:
                 self.multiple_view(v_list)  # multiple
+                if link:
+                    self.link_maps()
             else:
                 print("[ERROR] View should be either 'single' or 'multiple'.")
 
@@ -123,6 +127,34 @@ class View(object):
         # add control to views
         self.ctrl.add_control(v_list)
 
+    def link_maps(self):
+        """Link base maps on zoom level and center
+        :return:
+        """
+
+        # link zoom level
+        def change_zoom(change):
+            for m in self.maps:
+                m.set_zoom(change.new)
+        for m in self.maps:
+            m.get().observe(change_zoom, names="zoom")
+
+        # unify map center
+        centers = [m.center for m in self.maps]
+        center = [
+            sum([c[0] for c in centers]) / len(centers),
+            sum([c[1] for c in centers]) / len(centers)
+        ]
+        for m in self.maps:
+            m.set_center(center)
+
+        # link map center
+        def change_center(change):
+            for m in self.maps:
+                m.set_center(change.new)
+        for m in self.maps:
+            m.get().observe(change_center, names="center")
+
     def show(self):
         result = widgets.VBox(
             children=[self.cont.get(), self.ctrl.get()]
@@ -148,6 +180,12 @@ class View(object):
 
         def get(self):
             return self.map
+
+        def set_zoom(self, z):
+            self.map.zoom = z
+
+        def set_center(self, c):
+            self.map.center = c
 
         def add_layer(self, l):
             layer, legend, profile = l.get()
@@ -208,15 +246,15 @@ class View(object):
 
             plt.subplot()
             n = len(self.file_list)
-            offset = 0.1 / n
+            offset = 1.0 / n
             for i in range(n):
                 f = self.file_list[i]
                 fp = os.path.join(temp_path, f)
                 img = mpimg.imread(fp)
-                alpha = offset * (i + 1)
-                if i == n - 1:
-                    alpha = 1
-                plt.imshow(img, alpha=alpha)
+                # alpha = offset * (i + 1)
+                # if i == n - 1:
+                #     alpha = 1
+                plt.imshow(img, alpha=offset)
                 plt.axis("off")
             target_path = os.path.join(temp_path, "ghost.png")
             plt.savefig(target_path, transparent=True,
@@ -247,7 +285,11 @@ class View(object):
             cmap = self.p["task"]["options"]["Colormap"]
             img = os.path.join(temp_path, "legend.png")
             (v_min, v_max) = cmap[1]
-            norm = mpl.colors.Normalize(vmin=v_min, vmax=v_max)
+            type = cmap[2]
+            if type == "linear":
+                norm = mpl.colors.Normalize(vmin=v_min, vmax=v_max)
+            else:
+                norm = mpl.colors.LogNorm(vmin=v_min, vmax=v_max)
             fig, ax = plt.subplots(figsize=(5, 0.2))
             fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap[0]),
                          cax=ax, orientation="horizontal")
@@ -432,8 +474,9 @@ class View(object):
                     self.player.value = self.timeline.index(t)
                     for v in self.arg:
                         p = v.ctrl.widgets["player"]
-                        if p is not None and t in p.slider.options:
+                        if p.slider is not None and t in p.slider.options:
                             p.slider.value = t
+
                 self.slider.observe(on_slider_change, names="value")
 
                 def on_player_change(change):
@@ -441,8 +484,9 @@ class View(object):
                     self.slider.value = t
                     for v in self.arg:
                         p = v.ctrl.widgets["player"]
-                        if p is not None and t in p.slider.options:
+                        if p.slider is not None and t in p.slider.options:
                             p.slider.value = t
+
                 self.player.observe(on_player_change, names="value")
 
                 widgets.link((self.speed, "value"), (self.player, "interval"))

@@ -19,6 +19,7 @@ import wradlib as wrl
 import numpy as np
 from dateutil import parser
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 
 TEMP_SET_PATH = "./temp_sets"
 
@@ -237,7 +238,7 @@ class PolarVol2D:
             "Scan": scan,
             "Quantity": qty,
             "Appearance": app,
-            "Colormap": ("jet", (self.v_min, self.v_max)),
+            "Colormap": ("jet", (self.v_min, self.v_max), "linear"),
             "Bounds": self.bounds
         }
         return c
@@ -254,23 +255,62 @@ class PolarVol2D:
         qty = config["options"]["qty"]
         with h5py.File(self.file_path, "r") as f:
             self.data = f[scan][qty]["data"][...]
-            elangle = float(f[scan]["where"].attrs["elangle"])
-            rscale = float(f[scan]["where"].attrs["rscale"])
-            nbins = int(f[scan]["where"].attrs["nbins"])
-            nrays = int(f[scan]["where"].attrs["nrays"])
-            gain = float(f[scan][qty]["what"].attrs["gain"])
-            offset = float(f[scan][qty]["what"].attrs["offset"])
-            nodata = float(f[scan][qty]["what"].attrs["nodata"])
-            undetect = float(f[scan][qty]["what"].attrs["undetect"])
-            lon = float(f["where"].attrs["lon"])
-            lat = float(f["where"].attrs["lat"])
-            height = float(f["where"].attrs["height"])
+
+            # prepare attributes
+            elangle = f[scan]["where"].attrs["elangle"]
+            if isinstance(elangle, np.ndarray): elangle = elangle[0]
+            elangle = float(elangle)
+
+            rscale = f[scan]["where"].attrs["rscale"]
+            if isinstance(rscale, np.ndarray): rscale = rscale[0]
+            rscale = float(rscale)
+
+            nbins = f[scan]["where"].attrs["nbins"]
+            if isinstance(nbins, np.ndarray): nbins = nbins[0]
+            nbins = int(nbins)
+
+            nrays = f[scan]["where"].attrs["nrays"]
+            if isinstance(nrays, np.ndarray): nrays = nrays[0]
+            nrays = int(nrays)
+
+            gain = f[scan][qty]["what"].attrs["gain"]
+            if isinstance(gain, np.ndarray): gain = gain[0]
+            gain = float(gain)
+
+            offset = f[scan][qty]["what"].attrs["offset"]
+            if isinstance(offset, np.ndarray): offset = offset[0]
+            offset = float(offset)
+
+            nodata = f[scan][qty]["what"].attrs["nodata"]
+            if isinstance(nodata, np.ndarray): nodata = nodata[0]
+            nodata = float(nodata)
+
+            undetect = f[scan][qty]["what"].attrs["undetect"]
+            if isinstance(undetect, np.ndarray): undetect = undetect[0]
+            undetect = float(undetect)
+
+            lon = f["where"].attrs["lon"]
+            if isinstance(lon, np.ndarray): lon = lon[0]
+            lon = float(lon)
+
+            lat = f["where"].attrs["lat"]
+            if isinstance(lat, np.ndarray): lat = lat[0]
+            lat = float(lat)
+
+            height = f["where"].attrs["height"]
+            if isinstance(height, np.ndarray): height = height[0]
+            height = float(height)
+
             date = f["what"].attrs["date"]
+            if isinstance(date, np.ndarray): date = date[0]
+            date = date.decode("utf-8")
+
             tp = f["what"].attrs["time"]
+            if isinstance(tp, np.ndarray): tp = tp[0]
+            tp = tp.decode("utf-8")
 
         # Datetime stamp
-        self.dt = date.decode("utf-8") + " " + tp.decode("utf-8")
-        self.dt = parser.parse(self.dt)
+        self.dt = parser.parse(date + " " + tp)
         self.dt = self.dt.replace(second=0, microsecond=0)  # ignore second
         self.dt = self.dt.strftime("%Y%m%d %H%M")  # transfer back to str
 
@@ -344,19 +384,131 @@ class ScanIntg2D:
 
     def __init__(self, file_path):
         self.file_path = file_path
+        self.data = None
+        self.grid = None
+        self.bounds = None
+        self.v_min = 1
+        self.v_max = 10000
+        self.dt = None
 
     def get_options(self):
-        pass
+        o_list = []
 
-    def process(self):
-        pass
+        # Quantity
+        qty_list = []
+        with h5py.File(self.file_path, "r") as f:
+            keys = [s for s in f["dataset1"].keys() if "data" in s]
+            for i in range(len(keys)):
+                k = keys[i]
+                qty = f["dataset1"][k]["what"].attrs["quantity"]
+                qty = qty[0].decode("utf-8")  # was array of b string
+                t = (qty, k)
+                qty_list.append(t)
+        o_list.append({
+            "key": "qty",
+            "type": "dropdown",
+            "options": qty_list,
+            "description": "Quantity"
+        })
 
-    def create_temp(self):
-        pass
+        # Appearance
+        o_list.append({
+            "key": "appearance",
+            "type": "dropdown",
+            "options": ["dynamic", "static"],
+            "description": "Appearance"
+        })
 
-    @staticmethod
-    def plot_static():
-        pass
+        return o_list
+
+    def get_profile(self, config):
+        """Return the profile string
+                :return:
+                """
+        c = copy.deepcopy(config)
+        qty = c["options"]["qty"]
+        app = c["options"]["appearance"]
+        with h5py.File(self.file_path, "r") as f:
+            qty = f["dataset1"][qty]["what"].attrs["quantity"]
+            if isinstance(qty, np.ndarray): qty = qty[0]
+            qty = qty.decode("utf-8")
+        c["options"] = {
+            "Quantity": qty,
+            "Appearance": app,
+            "Colormap": ("jet", (self.v_min, self.v_max), "log"),
+            "Bounds": self.bounds
+        }
+        return c
+
+    def process(self, config):
+        qty = config["options"]["qty"]
+        with h5py.File(self.file_path, "r") as f:
+            self.data = f["dataset1"][qty]["data"][...]
+
+            # prepare attributes
+            lon_min = f["dataset1"]["how"].attrs["lon_min"]
+            if isinstance(lon_min, np.ndarray): lon_min = lon_min[0]
+            lon_min = float(lon_min)
+
+            lon_max = f["dataset1"]["how"].attrs["lon_max"]
+            if isinstance(lon_min, np.ndarray): lon_max = lon_max[0]
+            lon_max = float(lon_max)
+
+            lat_min = f["dataset1"]["how"].attrs["lat_min"]
+            if isinstance(lat_min, np.ndarray): lat_min = lat_min[0]
+            lat_min = float(lat_min)
+
+            lat_max = f["dataset1"]["how"].attrs["lat_max"]
+            if isinstance(lat_max, np.ndarray): lat_max = lat_max[0]
+            lat_max = float(lat_max)
+
+            nrows = f["dataset1"]["how"].attrs["nrows"]
+            if isinstance(nrows, np.ndarray): nrows = nrows[0]
+            nrows = int(nrows)
+
+            ncols = f["dataset1"]["how"].attrs["ncols"]
+            if isinstance(ncols, np.ndarray): ncols = ncols[0]
+            ncols = int(ncols)
+
+            tp = f["dataset1"]["how"].attrs["time"]
+            if isinstance(tp, np.ndarray): tp = tp[0]
+            tp = tp.decode("utf-8")
+
+        # datatime stamp
+        self.dt = parser.parse(tp)
+        self.dt = self.dt.replace(second=0, microsecond=0)  # ignore second
+        self.dt = self.dt.strftime("%Y%m%d %H%M")  # transfer back to str
+
+        # Mask 0 values
+        self.data = np.ma.masked_values(self.data, 0)
+
+        # compute the grid
+        self.bounds = [[lat_min, lon_min], [lat_max, lon_max]]
+        lon_range = np.linspace(self.bounds[0][1], self.bounds[1][1], ncols + 1)
+        lat_range = np.linspace(self.bounds[0][0], self.bounds[1][0], nrows + 1)
+        lon_matrix = np.tile(lon_range, (ncols + 1, 1))
+        lat_matrix = np.tile(lat_range, (nrows + 1, 1)).T
+        self.grid = np.dstack((lon_matrix, lat_matrix))
+
+    def create_temp(self, temp_path):
+        """
+        Create temp file that is the raster image.
+        :return:
+        """
+        temp_img = temp_path + "/" + self.dt + ".png"
+        fig, ax = plt.subplots()
+        x_range = [self.bounds[0][1], self.bounds[1][1]]
+        y_range = [self.bounds[0][0], self.bounds[1][0]]
+        plt.xlim(x_range)
+        plt.ylim(y_range)
+        norm = colors.LogNorm(vmin=self.v_min, vmax=self.v_max)
+        plt.pcolormesh(self.grid[..., 0], self.grid[..., 1], self.data,
+                       cmap="jet", norm=norm,
+                       snap=True)
+        ax.axis("off")
+        plt.savefig(temp_img, transparent=True, bbox_inches="tight",
+                    pad_inches=0, dpi=300)
+        plt.close()
 
 
 # Local Test
