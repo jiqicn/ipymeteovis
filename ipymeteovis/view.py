@@ -15,13 +15,15 @@ from .task import Task
 
 
 class View(object):
-    def __init__(self, *args, height=400, col=1, link=False, multi=False):
+    def __init__(self, *args, height=400, col=1, zoom=7, link=False,
+                 multi=False):
         self.maps = []
         self.layers = []
         self.cont = None
         self.ctrl = None
         self.height = str(height) + "px"  # height of basemap
         self.col = col  # number of columns of content
+        self.zoom = zoom
         self.link = link  # only for multiple views, if maps are linked
         self.multi = multi  # single or multiple views
 
@@ -47,7 +49,8 @@ class View(object):
                 (b[0][0] + b[1][0]) * 0.5,
                 (b[0][1] + b[1][1]) * 0.5,
             ]
-            self.maps.append(self.Map(center, self.height))
+            self.maps.append(self.Map(center=center, height=self.height,
+                                      zoom=self.zoom))
 
             # init layer
             p = t.profile
@@ -83,7 +86,8 @@ class View(object):
             sum([c[0] for c in centers]) / len(centers),
             sum([c[1] for c in centers]) / len(centers)
         ]
-        self.maps.append((self.Map(center, self.height)))
+        self.maps.append((self.Map(center=center, height=self.height,
+                                   zoom=self.zoom)))
 
         # init layers
         for v in v_list:
@@ -167,13 +171,13 @@ class View(object):
         One basemap contains one or more layers.
         """
 
-        def __init__(self, center, height):
+        def __init__(self, center, height, zoom):
             self.center = center
             self.map = ill.Map(
                 basemap=ill.basemaps.CartoDB.Positron,
                 center=self.center,
                 scroll_wheel_zoom=True,
-                zoom=7,
+                zoom=zoom,
                 layout=widgets.Layout(height=height)
             )
             self.legend_list = []
