@@ -19,7 +19,7 @@ def make(data_path):
     g.show()
 
 
-def list(*args):
+def list():
     """Get list of temporary set
     :return:
     """

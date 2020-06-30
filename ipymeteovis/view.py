@@ -15,310 +15,447 @@ from .task import Task
 
 
 class View(object):
-    def __init__(self, *args, num_col=1):
-        self.c = None
-        self.b = None
-        self.l = None
-        self.w = None
+    def __init__(self, *args, view="single", height=400, col=1):
+        self.maps = []
+        self.layers = []
+        self.cont = None
+        self.ctrl = None
+        self.height = str(height) + "px"  # height of basemap
+        self.col = col  # number of columns of content
 
-        for arg in args:
-            # dual view
-            if isinstance(arg, tuple):
-                v_list = [View(a) for a in arg]
-                self.dual_view(v_list)
-                self.c.set_cols(num_col)
-                return
-            # overlay view
-            elif isinstance(arg, list):
-                v_list = [View(a) for a in arg]
-                self.overlay_view(v_list)
-                return
-
-        # if args are View instances or indices
-        if isinstance(args[0], View):
-            self.c = args[0].c
-            self.b = args[0].b
-            self.l = args[0].l
-            self.w = args[0].w
+        if len(args) == 1:
+            self.unit_view(args[0])  # unit
         else:
-            self.unit_view(id=args[0])
-        self.c.set_cols(num_col)
+            v_list = [View(i, height=height) for i in args]
+            if view == "single":
+                self.single_view(v_list)  # single
+            elif view == "multiple":
+                self.multiple_view(v_list)  # multiple
+            else:
+                print("[ERROR] View should be either 'single' or 'multiple'.")
 
-    def unit_view(self, id):
-        t = Temp(id)
-        b = t.profile["task"]["options"]["Bounds"]
-        center = [
-            (b[0][0] + b[1][0]) * 0.5,
-            (b[0][1] + b[1][1]) * 0.5,
-        ]
-        self.b = Basemap(center)
-        self.l = Layer(t.profile)
-        self.w = Widgets(t.profile)
-        self.c = Container()
+    def unit_view(self, arg):
+        if isinstance(arg, int):
+            # init basemap
+            t = Temp(arg)
+            b = t.profile["task"]["options"]["Bounds"]
+            center = [
+                (b[0][0] + b[1][0]) * 0.5,
+                (b[0][1] + b[1][1]) * 0.5,
+            ]
+            self.maps.append(self.Map(center, self.height))
 
-        # link container, basemap, layer and widget
-        self.w.add_control(self.l)
-        self.b.add_layer(self.l)
-        self.b.add_control(self.w)
-        self.c.add_child(self.b)
-        # self.c.add_child(self.w)
+            # init layer
+            p = t.profile
+            self.layers.append(self.Layer(p))
 
-    def dual_view(self, v_list):
-        self.c = Container()
-        for v in v_list:
-            self.c.add_child(v.c)
+            # init content
+            self.cont = self.Content(self.col)
 
-    def overlay_view(self, v_list):
-        self.c = Container()
-        # compute center of map
-        centers = [v.b.center for v in v_list]
+            # init control
+            self.ctrl = self.Control()
+
+            # add layer to basemap
+            self.maps[0].add_layer(self.layers[0])
+
+            # add control to layer
+            self.ctrl.add_control(self.layers[0])
+
+            # add basemap to content
+            self.cont.add_content(self.maps[0])
+        elif isinstance(arg, View):
+            # wrap the input view instance
+            self.maps = arg.maps
+            self.layers = arg.layers
+            self.cont = arg.cont
+            self.ctrl = arg.ctrl
+            self.height = arg.height
+            self.col = arg.col
+
+    def single_view(self, v_list):
+        # init maps
+        centers = [v.maps[0].center for v in v_list]
         center = [
             sum([c[0] for c in centers]) / len(centers),
             sum([c[1] for c in centers]) / len(centers)
         ]
-        self.b = Basemap(center)
+        self.maps.append((self.Map(center, self.height)))
 
-        # link
+        # init layers
         for v in v_list:
-            self.b.add_layer(v.l)
-        self.c.add_child(self.b)
+            self.layers = self.layers + v.layers
+
+        # init content
+        self.cont = self.Content(self.col)
+
+        # init control
+        self.ctrl = self.Control()
+
+        # add layers to basemap
+        for l in self.layers:
+            self.maps[0].add_layer(l)
+
+        # add map to content
+        self.cont.add_content(self.maps[0])
+
+        # add control to views
+        self.ctrl.add_control(v_list)
+
+    def multiple_view(self, v_list):
+        # init maps
+        for v in v_list:
+            self.maps = self.maps + v.maps
+
+        # init layers
+        for v in v_list:
+            self.layers = self.layers + v.layers
+
+        # init content
+        self.cont = self.Content(self.col)
+
+        # init control
+        self.ctrl = self.Control()
+
+        # add maps to content
+        for m in self.maps:
+            self.cont.add_content(m)
+
+        # add control to views
+        self.ctrl.add_control(v_list)
 
     def show(self):
-        """Show the view
-        :return:
-        """
-        # display(self.container)
-        display(self.c.grid)
-
-
-class Container(object):
-    def __init__(self):
-        self.grid = widgets.GridBox(
-            children=[],
-            layout=widgets.Layout(
-                grid_template_columns="100%"  # default to be one column
-            )
+        result = widgets.VBox(
+            children=[self.cont.get(), self.ctrl.get()]
         )
+        display(result)
 
-    def add_child(self, c):
-        self.grid.children += (c.get(),)
+    class Map(object):
+        """class definition of basemap
 
-    def set_cols(self, nc):
-        """Adjust template of grid based on number of columns
-        :param nc:
-        :return:
+        One basemap contains one or more layers.
         """
-        w = round(100.0 / nc, 2)
-        fmt = ""
-        for i in range(nc):
-            fmt += str(w) + "% "
-        self.grid.layout.grid_template_columns = fmt
 
-    def get(self):
-        return self.grid
+        def __init__(self, center, height):
+            self.center = center
+            self.map = ill.Map(
+                basemap=ill.basemaps.CartoDB.Positron,
+                center=self.center,
+                scroll_wheel_zoom=True,
+                zoom=7,
+                layout=widgets.Layout(height=height)
+            )
+            self.legend_list = []
 
+        def get(self):
+            return self.map
 
-class Layer(object):
-    def __init__(self, p):
-        # get the temp file list
-        self.temp_path = p["temp_path"]
-        self.file_list = []
-        for f in os.listdir(self.temp_path):
-            fp = os.path.join(self.temp_path, f)
-            if os.path.isfile(fp) and not f.startswith("."):
-                self.file_list.append(f)
-        self.file_list.sort()
+        def add_layer(self, l):
+            layer, legend, profile = l.get()
 
-        task = p["task"]["task"]
-        task_list = Task.tasks
-        # temp set of task 1 and 2 (raster with image temp files)
-        if task == task_list[0] or task == task_list[1]:
+            # add layer to map
+            self.map.add_layer(layer)
+
+            # add legend to map if necessary
+            if "Colormap" in profile["task"]["options"]:
+                t = profile["task"]["options"]["Colormap"]
+                if t not in self.legend_list and legend is not None:
+                    legend_ctrl = ill.WidgetControl(
+                        widget=legend,
+                        position="topright"
+                    )
+                    self.map.add_control(legend_ctrl)
+                    self.legend_list.append(t)
+
+    class Layer(object):
+        """class definition of layer
+
+        A layer corresponds to a temp set
+        """
+
+        def __init__(self, p):
+            self.p = p
             self.temp_path = p["temp_path"]
-            self.bounds = p["task"]["options"]["Bounds"]
-            self.layer = ill.ImageOverlay(
+            self.file_list = []
+            for f in os.listdir(self.temp_path):
+                fp = os.path.join(self.temp_path, f)
+                if os.path.isfile(fp) and not f.startswith("."):
+                    self.file_list.append(f)
+            self.file_list.sort()
+            self.layer = None
+            self.legend = None
+
+            # different branches by task
+            task = p["task"]["task"]
+            task_list = Task.tasks
+            if task == task_list[0] or task == task_list[1]:
+                app = p["task"]["options"]["Appearance"]
+                if app == "static":
+                    self.layer = self.raster_static()
+                else:
+                    self.layer = self.raster_dynamic()
+                self.legend = self.color_map()
+
+        def raster_static(self):
+            """Single image or ghost view of multiple images
+            :return:
+            """
+            temp_path = self.p["temp_path"]
+            bounds = self.p["task"]["options"]["Bounds"]
+            layer = ill.ImageOverlay(
                 url="",
-                bounds=self.bounds
+                bounds=bounds
             )
 
-            if p["task"]["options"]["Appearance"] == "static":
-                self.image_static()
-            else:
-                self.image_dynamic()
+            plt.subplot()
+            n = len(self.file_list)
+            offset = 0.1 / n
+            for i in range(n):
+                f = self.file_list[i]
+                fp = os.path.join(temp_path, f)
+                img = mpimg.imread(fp)
+                alpha = offset * (i + 1)
+                if i == n - 1:
+                    alpha = 1
+                plt.imshow(img, alpha=alpha)
+                plt.axis("off")
+            target_path = os.path.join(temp_path, "ghost.png")
+            plt.savefig(target_path, transparent=True,
+                        bbox_inches="tight", pad_inches=0, dpi=300)
+            plt.close()
+            layer.url = self.read_image(target_path)
+            os.remove(target_path)
+            return layer
 
-    def image_static(self):
-        """Single image or ghost view of multiple images
-        :return:
-        """
-        plt.subplot()
-        n = len(self.file_list)
-        offset = 0.1 / n
-        for i in range(n):
-            f = self.file_list[i]
-            fp = os.path.join(self.temp_path, f)
-            img = mpimg.imread(fp)
-            alpha = offset * (i + 1)
-            if i == n - 1:
-                alpha = 1
-            plt.imshow(img, alpha=alpha)
-            plt.axis("off")
-        target_path = os.path.join(self.temp_path, "ghost.png")
-        plt.savefig(target_path, transparent=True,
-                    bbox_inches="tight", pad_inches=0, dpi=300)
-        plt.close()
-        self.layer.url = self.read_image(target_path)
-        os.remove(target_path)
-
-    def image_dynamic(self):
-        """Animation of images, initialize layer with the first image in temp
-        :return:
-        """
-        first_img = os.path.join(self.temp_path, self.file_list[0])
-        self.layer.url = self.read_image(first_img)
-
-    @staticmethod
-    def read_image(img_path):
-        """
-        read image file as base64 string
-        :param img_path:
-        :return:
-        """
-        with open(img_path, "rb") as img_file:
-            result = "data:image/png;base64," + b64encode(
-                img_file.read()).decode("ascii")
-        return result
-
-    def get(self):
-        return self.layer
-
-
-class Basemap(object):
-    def __init__(self, center):
-        self.center = center
-        self.map = ill.Map(
-            basemap=ill.basemaps.CartoDB.Positron,
-            center=self.center,
-            scroll_wheel_zoom=True,
-            zoom=7,
-            layout=widgets.Layout(
-                min_height="200px",
+        def raster_dynamic(self):
+            """Animation of images, initialize layer with the first image in temp
+            :return:
+            """
+            temp_path = self.p["temp_path"]
+            bounds = self.p["task"]["options"]["Bounds"]
+            layer = ill.ImageOverlay(
+                url="",
+                bounds=bounds
             )
-        )
-        self.container = widgets.VBox([self.map])
 
-    def add_layer(self, l):
-        self.map.add_layer(l.get())
+            first_img = os.path.join(temp_path, self.file_list[0])
+            layer.url = self.read_image(first_img)
 
-    def add_control(self, w):
-        self.container.children += (w.get(), )
+            return layer
 
-    def set_height(self, h):
-        self.map.layout.height = h
+        def color_map(self):
+            temp_path = self.p["temp_path"]
+            cmap = self.p["task"]["options"]["Colormap"]
+            img = os.path.join(temp_path, "legend.png")
+            (v_min, v_max) = cmap[1]
+            norm = mpl.colors.Normalize(vmin=v_min, vmax=v_max)
+            fig, ax = plt.subplots(figsize=(5, 0.2))
+            fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap[0]),
+                         cax=ax, orientation="horizontal")
+            plt.savefig(img, bbox_inches="tight", pad_inches=0.02)
+            plt.close()
 
-    def get(self):
-        return self.container
+            # build legend widget
+            legend = widgets.Image(
+                value=open(img, "rb").read(),
+                format="png",
+                layout=widgets.Layout(height="25px", width="250px")
+            )
+            os.remove(img)
 
+            return legend
 
-class Widgets(object):
-    def __init__(self, p):
-        # container of control widgets
-        self.control = widgets.VBox(children=[])
+        @staticmethod
+        def read_image(img_path):
+            """
+            read image file as base64 string
+            :param img_path:
+            :return:
+            """
+            with open(img_path, "rb") as img_file:
+                result = "data:image/png;base64," + b64encode(
+                    img_file.read()).decode("ascii")
+            return result
 
-        # check flags
-        self.app = p["task"]["options"]["Appearance"]
-        self.cmap = None
-        if "Colormap" in p["task"]["options"]:
-            self.cmap = p["task"]["options"]["Colormap"]
+        def get(self):
+            return self.layer, self.legend, self.p
 
-    def add_control(self, l):
-        """Check the possible widget list and add to layer
-        :param l:
-        :return:
+    class Content(object):
+        """class definition of content
+
+        One content contains one or more basemaps
         """
-        # add player if it is a dynamic view
-        if self.cmap is not None:
-            c = self.color_map(l)
-            self.control.children += (c,)
-        if self.app == "dynamic":
-            p = self.player(l)
-            self.control.children += (p,)
 
-    def player(self, l):
-        """Build player of animation
-        :param l:
-        :return:
+        def __init__(self, col):
+            width = round(100.0 / col, 2)
+            template = ""
+            for i in range(col):
+                template += str(width) + "% "
+            self.grid = widgets.GridBox(
+                children=[],
+                layout=widgets.Layout(
+                    grid_template_columns=template
+                )
+            )
+
+        def add_content(self, m):
+            self.grid.children += (m.get(),)
+
+        def get(self):
+            return self.grid
+
+    class Control(object):
+        """class definition of control
+
+        Area that contains all the widgets for controlling the view.
         """
-        timeline = [t.split(".")[0] for t in l.file_list]
-        timeline = [parser.parse(t) for t in timeline]
 
-        # initialize widgets
-        player = widgets.Play(value=0, min=0, max=len(timeline) - 1,
-                              interval=150)
-        slider = widgets.SelectionSlider(value=timeline[0], options=timeline)
-        speed = widgets.Dropdown(
-            options=[("1", 250), ("2", 200), ("3", 150), ("4", 100), ("5", 50)],
-            value=150,
-            description="Speed:",
-            layout=widgets.Layout(
-                width="100px"
-            ),
-            style={
-                "description_width": "45px"
+        def __init__(self):
+            self.container = widgets.VBox(
+                children=[]
+            )
+            self.widgets = {
+                "player": None
             }
-        )
 
-        # handle events
-        layer = l.get()
-        temp_path = l.temp_path
-        file_list = l.file_list
+        def add_control(self, arg):
+            # add player widget
+            self.widgets["player"] = self.Player(arg)
+            if self.widgets["player"].get() is not None:
+                self.container.children += (self.widgets["player"].get(),)
 
-        def on_slider_change(change):
-            i = timeline.index(change.new)
-            player.value = i  # regarding change on player
-            img = os.path.join(temp_path, file_list[i])
-            layer.url = Layer.read_image(img)
+        def get(self):
+            return self.container
 
-        def on_player_change(change):
-            t = timeline[change.new]
-            slider.value = t  # regarding change on slider
-            img = os.path.join(temp_path, file_list[change.new])
-            layer.url = Layer.read_image(img)
+        class Player(object):
+            """class definition of animation player widget
+            """
 
-        slider.observe(on_slider_change, names="value")
-        player.observe(on_player_change, names="value")
-        widgets.link((speed, "value"), (player, "interval"))
+            def __init__(self, arg):
+                self.arg = arg
+                self.timeline = None
+                self.player = None
+                self.slider = None
+                self.speed = None
 
-        result = widgets.HBox(
-            children=[player, speed, slider],
-            layout=widgets.Layout(
-                width="100%",
-                flex_flow="row wrap"
-            )
-        )
-        return result
+                # Build new player or merge existing players
+                if isinstance(arg, View.Layer):
+                    self.unit_player()
+                elif isinstance(arg, list):
+                    self.joint_player()
 
-    def color_map(self, l):
-        """Build color map legend
-        :return:
-        """
-        # create legend image
-        img = os.path.join(l.temp_path, "legend.png")
-        cmap = self.cmap[0]
-        (v_min, v_max) = self.cmap[1]
-        norm = mpl.colors.Normalize(vmin=v_min, vmax=v_max)
-        fig, ax = plt.subplots(figsize=(5, 0.2))
-        fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-                     cax=ax, orientation="horizontal")
-        plt.savefig(img, bbox_inches="tight", pad_inches=0.02)
-        plt.close()
+            def unit_player(self):
+                layer, legend, profile = self.arg.get()
+                temp_path = self.arg.temp_path
+                file_list = self.arg.file_list
+                if "Appearance" in profile["task"]["options"]:
+                    app = profile["task"]["options"]["Appearance"]
+                    if app == "static":
+                        return
 
-        # build legend widget
-        result = widgets.Image(
-            value=open(img, "rb").read(),
-            format="png",
-            layout=widgets.Layout(height="25px", width="200px")
-        )
-        os.remove(img)
-        return result
+                # compute timeline
+                timeline = [t.split(".")[0] for t in self.arg.file_list]
+                timeline = [parser.parse(t) for t in timeline]
+                self.timeline = timeline
 
-    def get(self):
-        return self.control
+                # init widgets
+                self.player = widgets.Play(value=0, min=0,
+                                           max=len(timeline) - 1,
+                                           interval=150)
+                self.slider = widgets.SelectionSlider(value=timeline[0],
+                                                      options=timeline)
+                self.speed = widgets.Dropdown(
+                    options=[("1", 250), ("2", 200), ("3", 150), ("4", 100),
+                             ("5", 50)],
+                    value=150,
+                    description="Speed:",
+                    layout=widgets.Layout(
+                        width="100px"
+                    ),
+                    style={
+                        "description_width": "45px"
+                    }
+                )
+
+                # slider change event
+                def on_slider_change(change):
+                    i = self.timeline.index(change.new)
+                    self.player.value = i  # regarding change on player
+                    img = os.path.join(temp_path, file_list[i])
+                    layer.url = View.Layer.read_image(img)
+
+                self.slider.observe(on_slider_change, names="value")
+
+                # player change event
+                def on_player_change(change):
+                    t = self.timeline[change.new]
+                    self.slider.value = t  # regarding change on slider
+                    img = os.path.join(temp_path, file_list[change.new])
+                    layer.url = View.Layer.read_image(img)
+
+                self.player.observe(on_player_change, names="value")
+
+                # speed change event
+                widgets.link((self.speed, "value"), (self.player, "interval"))
+
+            def joint_player(self):
+                # compute timeline
+                timeline = []
+                for v in self.arg:
+                    p = v.ctrl.widgets["player"]
+                    if p.timeline is not None:
+                        timeline = timeline + p.timeline
+                    timeline = list(set(timeline))
+                    timeline.sort()
+                self.timeline = timeline
+
+                # init widgets
+                self.player = widgets.Play(value=0, min=0,
+                                           max=len(timeline) - 1,
+                                           interval=150)
+                self.slider = widgets.SelectionSlider(value=timeline[0],
+                                                      options=timeline)
+                self.speed = widgets.Dropdown(
+                    options=[("1", 250), ("2", 200), ("3", 150), ("4", 100),
+                             ("5", 50)],
+                    value=150,
+                    description="Speed:",
+                    layout=widgets.Layout(
+                        width="100px"
+                    ),
+                    style={
+                        "description_width": "45px"
+                    }
+                )
+
+                def on_slider_change(change):
+                    t = change.new
+                    self.player.value = self.timeline.index(t)
+                    for v in self.arg:
+                        p = v.ctrl.widgets["player"]
+                        if p is not None and t in p.slider.options:
+                            p.slider.value = t
+                self.slider.observe(on_slider_change, names="value")
+
+                def on_player_change(change):
+                    t = self.timeline[change.new]
+                    self.slider.value = t
+                    for v in self.arg:
+                        p = v.ctrl.widgets["player"]
+                        if p is not None and t in p.slider.options:
+                            p.slider.value = t
+                self.player.observe(on_player_change, names="value")
+
+                widgets.link((self.speed, "value"), (self.player, "interval"))
+
+            def get(self):
+                if self.player is None:
+                    return None
+
+                result = widgets.HBox(
+                    children=[self.player, self.speed, self.slider],
+                    layout=widgets.Layout(
+                        width="100%",
+                        flex_flow="row wrap"
+                    )
+                )
+                return result
