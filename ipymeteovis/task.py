@@ -20,6 +20,7 @@ import numpy as np
 from dateutil import parser
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.cm as cm
 
 TEMP_SET_PATH = "./temp_sets"
 
@@ -366,8 +367,10 @@ class PolarVol2D:
         y_range = [self.bounds[0][0], self.bounds[1][0]]
         plt.xlim(x_range)
         plt.ylim(y_range)
+        cmap = cm.get_cmap("jet")
+        # cmap.set_bad("grey")  # give color to bad values masked
         plt.pcolormesh(self.grid[..., 0], self.grid[..., 1], self.data,
-                       cmap="jet", vmin=self.v_min, vmax=self.v_max,
+                       cmap=cmap, vmin=self.v_min, vmax=self.v_max,
                        snap=True)
         ax.axis("off")
         plt.savefig(temp_img, transparent=True, bbox_inches="tight",
@@ -502,8 +505,10 @@ class ScanIntg2D:
         plt.xlim(x_range)
         plt.ylim(y_range)
         norm = colors.LogNorm(vmin=self.v_min, vmax=self.v_max)
+        cmap = cm.get_cmap("jet")
+        # cmap.set_bad("grey")  # give color to bad values masked
         plt.pcolormesh(self.grid[..., 0], self.grid[..., 1], self.data,
-                       cmap="jet", norm=norm,
+                       cmap=cmap, norm=norm,
                        snap=True)
         ax.axis("off")
         plt.savefig(temp_img, transparent=True, bbox_inches="tight",
