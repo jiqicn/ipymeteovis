@@ -4,7 +4,7 @@ The control class is for communicating with the front-end GUI, and to
 organize the task into parallel.
 Different tasks are defined by different classes. The "task" class is a unique
 entrance that leads to different task instance based on the input task.
-Each task class defines a process and a create temp method as the two major
+Each task class defines a tests and a create temp method as the two major
 steps of the background computation. Content will be different.
 """
 
@@ -20,7 +20,6 @@ import numpy as np
 from dateutil import parser
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-import matplotlib.cm as cm
 
 TEMP_SET_PATH = "./temp_sets"
 
@@ -85,7 +84,7 @@ class Control(object):
         self.tasks = self.parallel(job, args)
         print("Done!")
 
-        # process tasks
+        # tests tasks
         print("[STEP] Process task......", end="")
         job = partial(
             self.process,
@@ -214,14 +213,6 @@ class PolarVol2D:
             "description": "Quantity"
         })
 
-        # Appearance
-        o_list.append({
-            "key": "appearance",
-            "type": "dropdown",
-            "options": ["dynamic", "static"],
-            "description": "Appearance"
-        })
-
         return o_list
 
     def get_profile(self, config):
@@ -231,14 +222,14 @@ class PolarVol2D:
         c = copy.deepcopy(config)
         scan = c["options"]["scan"]
         qty = c["options"]["qty"]
-        app = c["options"]["appearance"]
+        # app = c["options"]["appearance"]
         with h5py.File(self.file_path, "r") as f:
             scan = "Elev. = " + str(f[scan]["where"].attrs["elangle"])
             qty = f["dataset1"][qty]["what"].attrs["quantity"].decode("utf-8")
         c["options"] = {
             "Scan": scan,
             "Quantity": qty,
-            "Appearance": app,
+            # "Appearance": app,
             "Colormap": ("jet", (self.v_min, self.v_max), "linear"),
             "Bounds": self.bounds
         }
@@ -367,10 +358,8 @@ class PolarVol2D:
         y_range = [self.bounds[0][0], self.bounds[1][0]]
         plt.xlim(x_range)
         plt.ylim(y_range)
-        cmap = cm.get_cmap("jet")
-        # cmap.set_bad("grey")  # give color to bad values masked
         plt.pcolormesh(self.grid[..., 0], self.grid[..., 1], self.data,
-                       cmap=cmap, vmin=self.v_min, vmax=self.v_max,
+                       cmap="jet", vmin=self.v_min, vmax=self.v_max,
                        snap=True)
         ax.axis("off")
         plt.savefig(temp_img, transparent=True, bbox_inches="tight",
@@ -414,14 +403,6 @@ class ScanIntg2D:
             "description": "Quantity"
         })
 
-        # Appearance
-        o_list.append({
-            "key": "appearance",
-            "type": "dropdown",
-            "options": ["dynamic", "static"],
-            "description": "Appearance"
-        })
-
         return o_list
 
     def get_profile(self, config):
@@ -430,14 +411,14 @@ class ScanIntg2D:
                 """
         c = copy.deepcopy(config)
         qty = c["options"]["qty"]
-        app = c["options"]["appearance"]
+        # app = c["options"]["appearance"]
         with h5py.File(self.file_path, "r") as f:
             qty = f["dataset1"][qty]["what"].attrs["quantity"]
             if isinstance(qty, np.ndarray): qty = qty[0]
             qty = qty.decode("utf-8")
         c["options"] = {
             "Quantity": qty,
-            "Appearance": app,
+            # "Appearance": app,
             "Colormap": ("jet", (self.v_min, self.v_max), "log"),
             "Bounds": self.bounds
         }
@@ -491,6 +472,7 @@ class ScanIntg2D:
         lat_range = np.linspace(self.bounds[0][0], self.bounds[1][0], nrows + 1)
         lon_matrix = np.tile(lon_range, (ncols + 1, 1))
         lat_matrix = np.tile(lat_range, (nrows + 1, 1)).T
+        lat_matrix = np.flip(lat_matrix, 0)
         self.grid = np.dstack((lon_matrix, lat_matrix))
 
     def create_temp(self, temp_path):
@@ -505,10 +487,8 @@ class ScanIntg2D:
         plt.xlim(x_range)
         plt.ylim(y_range)
         norm = colors.LogNorm(vmin=self.v_min, vmax=self.v_max)
-        cmap = cm.get_cmap("jet")
-        # cmap.set_bad("grey")  # give color to bad values masked
         plt.pcolormesh(self.grid[..., 0], self.grid[..., 1], self.data,
-                       cmap=cmap, norm=norm,
+                       cmap="jet", norm=norm,
                        snap=True)
         ax.axis("off")
         plt.savefig(temp_img, transparent=True, bbox_inches="tight",
@@ -525,7 +505,6 @@ if __name__ == '__main__':
         "task": "Radar polar volume (2D)",
         "scan": "dataset9",
         "qty": "data1",
-        "appearance": "static"
     }
     e = Task(fp, config)
     e.process(config)
@@ -540,7 +519,6 @@ if __name__ == '__main__':
         'options': {
             'scan': 'dataset15',
             'qty': 'data1',
-            'appearance': 'dynamic'
         }
     }
     c.submit(config)

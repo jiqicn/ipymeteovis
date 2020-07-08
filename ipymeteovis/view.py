@@ -9,6 +9,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from dateutil import parser
+from PIL import Image
+import numpy as np
 
 from .temp import Temp
 from .task import Task
@@ -16,7 +18,7 @@ from .task import Task
 
 class View(object):
     def __init__(self, *args, height=400, col=1, zoom=7, link=False,
-                 multi=False):
+                 grid=False, avg=False):
         self.maps = []
         self.layers = []
         self.cont = None
@@ -25,15 +27,17 @@ class View(object):
         self.col = col  # number of columns of content
         self.zoom = zoom
         self.link = link  # only for multiple views, if maps are linked
-        self.multi = multi  # single or multiple views
+        self.multi = grid  # single or multiple views
+        self.static = avg  # only for unit views, if map is static average
 
         if len(args) == 1:
             self.unit_view(args[0])  # unit
         else:
-            v_list = [View(i, height=height) for i in args]
-            if not multi:
+            v_list = [View(i, height=height, avg=avg, zoom=zoom) for i in
+                      args]
+            if not grid:
                 self.single_view(v_list)  # single
-            elif multi:
+            elif grid:
                 self.multiple_view(v_list)  # multiple
                 if link:
                     self.link_maps()
@@ -54,7 +58,7 @@ class View(object):
 
             # init layer
             p = t.profile
-            self.layers.append(self.Layer(p))
+            self.layers.append(self.Layer(p, self.static))
 
             # init content
             self.cont = self.Content(self.col)
@@ -78,6 +82,11 @@ class View(object):
             self.ctrl = arg.ctrl
             self.height = arg.height
             self.col = arg.col
+            self.zoom = arg.zoom
+            self.link = arg.link
+            self.multi = arg.multi
+            self.static = arg.static
+
 
     def single_view(self, v_list):
         # init maps
@@ -214,7 +223,7 @@ class View(object):
         A layer corresponds to a temp set
         """
 
-        def __init__(self, p):
+        def __init__(self, p, static):
             self.p = p
             self.temp_path = p["temp_path"]
             self.file_list = []
@@ -225,13 +234,13 @@ class View(object):
             self.file_list.sort()
             self.layer = None
             self.legend = None
+            self.static = static
 
             # different branches by task
             task = p["task"]["task"]
             task_list = Task.tasks
             if task == task_list[0] or task == task_list[1]:
-                app = p["task"]["options"]["Appearance"]
-                if app == "static":
+                if static:
                     self.layer = self.raster_static()
                 else:
                     self.layer = self.raster_dynamic()
@@ -248,22 +257,16 @@ class View(object):
                 bounds=bounds
             )
 
-            plt.subplot()
-            n = len(self.file_list)
-            offset = 1.0 / n
-            for i in range(n):
-                f = self.file_list[i]
+            # create average image
+            ims = []
+            for f in self.file_list:
                 fp = os.path.join(temp_path, f)
-                img = mpimg.imread(fp)
-                # alpha = offset * (i + 1)
-                # if i == n - 1:
-                #     alpha = 1
-                plt.imshow(img, alpha=offset)
-                plt.axis("off")
+                ims.append(Image.open(fp, mode="r"))
+            ims = np.array([np.array(im) for im in ims])
+            imave = np.average(ims, axis=0)
+            result = Image.fromarray(imave.astype("uint8"))
             target_path = os.path.join(temp_path, "ghost.png")
-            plt.savefig(target_path, transparent=True,
-                        bbox_inches="tight", pad_inches=0, dpi=300)
-            plt.close()
+            result.save(target_path, "PNG")
             layer.url = self.read_image(target_path)
             os.remove(target_path)
             return layer
@@ -390,15 +393,14 @@ class View(object):
                     self.joint_player()
 
             def unit_player(self):
+                # no player for static view
+                if self.arg.static:
+                    return
+
+                # compute timeline
                 layer, legend, profile = self.arg.get()
                 temp_path = self.arg.temp_path
                 file_list = self.arg.file_list
-                if "Appearance" in profile["task"]["options"]:
-                    app = profile["task"]["options"]["Appearance"]
-                    if app == "static":
-                        return
-
-                # compute timeline
                 timeline = [t.split(".")[0] for t in self.arg.file_list]
                 timeline = [parser.parse(t) for t in timeline]
                 self.timeline = timeline
@@ -444,6 +446,14 @@ class View(object):
                 widgets.link((self.speed, "value"), (self.player, "interval"))
 
             def joint_player(self):
+                # no player for static view
+                static = True
+                for a in self.arg:
+                    if not a.static:
+                        static = False
+                if static:
+                    return
+
                 # compute timeline
                 timeline = []
                 for v in self.arg:

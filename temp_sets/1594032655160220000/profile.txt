@@ -1,0 +1,1 @@
+{'source': '/Users/ep/Workspace/data/BE_NL/rbc_part/BE/WID/', 'temp_path': './temp_sets/1594032655160220000/temp', 'task': {'name': 'rbc_wid', 'desc': 'DEFAULT_DESC', 'task': 'Radar scan integration (2D)', 'options': {'Quantity': 'VID', 'Colormap': ('jet', (1, 10000), 'log'), 'Bounds': [[49.00700086767582, 4.1387436601093395], [50.804737215248686, 6.924231591263814]]}}}

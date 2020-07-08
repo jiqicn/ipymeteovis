@@ -1,0 +1,1 @@
+{'source': '/Users/ep/Workspace/data/BE_NL/rbc_part/NL/HRW/', 'temp_path': './temp_sets/1594032736800346000/temp', 'task': {'name': 'rbc_hrw', 'desc': 'DEFAULT_DESC', 'task': 'Radar scan integration (2D)', 'options': {'Quantity': 'VID', 'Colormap': ('jet', (1, 10000), 'log'), 'Bounds': [[50.929331218074424, 3.7156813315082817], [52.72642700459547, 6.618291729569286]]}}}

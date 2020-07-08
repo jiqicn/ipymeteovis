@@ -1,0 +1,1 @@
+{'source': '/Users/ep/Workspace/data/BE_NL/rbc_part/BE/JAB/', 'temp_path': './temp_sets/1594032532430927000/temp', 'task': {'name': 'rbc_jab', 'desc': 'DEFAULT_DESC', 'task': 'Radar scan integration (2D)', 'options': {'Quantity': 'VID', 'Colormap': ('jet', (1, 10000), 'log'), 'Bounds': [[50.28422801881231, 1.661102437704154], [52.08153859133786, 4.522960220032004]]}}}

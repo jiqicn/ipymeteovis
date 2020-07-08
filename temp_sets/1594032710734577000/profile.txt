@@ -1,0 +1,1 @@
+{'source': '/Users/ep/Workspace/data/BE_NL/rbc_part/NL/DBL/', 'temp_path': './temp_sets/1594032710734577000/temp', 'task': {'name': 'rbc_dbl', 'desc': 'DEFAULT_DESC', 'task': 'Radar scan integration (2D)', 'options': {'Quantity': 'VID', 'Colormap': ('jet', (1, 10000), 'log'), 'Bounds': [[51.194072219886465, 3.7477836594245293], [52.99107992841527, 6.667565694131063]]}}}
