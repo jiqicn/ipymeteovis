@@ -1,6 +1,6 @@
 # ipymeteovis
 
-A Jupyter-based toolkit for visualizing meteorological and ecological data used at TCE UvA group.
+A Jupyter-based toolkit for visualizing meteorological and ecological data.
 
 ## Usage
 
